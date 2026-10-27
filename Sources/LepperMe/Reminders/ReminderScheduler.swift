@@ -174,7 +174,8 @@ final class ReminderScheduler: ObservableObject {
     private func updatePreWarning(settings s: AppSettings) {
         guard s.preWarningEnabled else { return }
         let lead = TimeInterval(s.preWarningSeconds)
-        let upcoming = ReminderKind.allCases.filter {
+        // Posture is a quick hint itself, so it gets no pre-warning.
+        let upcoming = ReminderKind.allCases.filter { $0 != .posture }.filter {
             let config = s.config(for: $0)
             return config.isEnabled && config.intervalSeconds - (elapsed[$0] ?? 0) <= lead
         }
@@ -182,15 +183,7 @@ final class ReminderScheduler: ObservableObject {
         let kind = highestPriority(upcoming)
         guard preWarnedKind != kind else { return }
         preWarnedKind = kind
-        overlay.showPreWarning(
-            kind: kind,
-            seconds: s.preWarningSeconds,
-            allowSnooze: s.snoozeEnabled,
-            snoozeMinutes: s.snoozeMinutes,
-            playSound: s.soundEnabled,
-            onSkip: { [weak self] in self?.finish(kind, outcome: .skipped) },
-            onSnooze: { [weak self] in self?.finish(kind, outcome: .snoozed) }
-        )
+        overlay.showPreWarning(kind: kind, seconds: s.preWarningSeconds, playSound: s.soundEnabled)
     }
 
     // MARK: - Showing reminders

@@ -8,7 +8,7 @@ enum Snapshot {
     static func run(into directory: URL, settings: SettingsStore) {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
-        for kind in ReminderKind.allCases {
+        for kind in ReminderKind.allCases where kind != .posture {
             let model = OverlayModel(kind: kind, message: kind.message,
                                      duration: TimeInterval(kind.defaultConfig.durationSeconds),
                                      allowSnooze: true, snoozeMinutes: 5)
@@ -40,10 +40,21 @@ enum Snapshot {
         write(OverlayView(model: done, dimming: settings.settings.dimming, screenSize: CGSize(width: 1440, height: 900), snapshot: true).background(fakeDesktop),
               size: CGSize(width: 1440, height: 900), to: directory.appendingPathComponent("overlay-completed.png"))
 
-        let warning = PreWarningModel(kind: .eyes, seconds: 10, allowSnooze: true, snoozeMinutes: 5)
+        let posture = PostureHUDModel(message: ReminderKind.posture.message)
+        posture.visible = true
+        posture.start = Date().addingTimeInterval(-2.4)
+        write(PostureHUDView(model: posture).frame(maxWidth: .infinity, maxHeight: .infinity).background(fakeDesktop),
+              size: CGSize(width: 1000, height: 640), to: directory.appendingPathComponent("posture-hud.png"))
+
+        let toast = ToastModel(symbol: "video.fill", title: "Meeting erkannt", message: "Keine Erinnerungen, bis es vorbei ist.")
+        toast.visible = true
+        write(ToastView(model: toast).background(fakeDesktop),
+              size: CGSize(width: 420, height: 120), to: directory.appendingPathComponent("meeting-toast.png"))
+
+        let warning = PreWarningModel(kind: .eyes, seconds: 10)
         warning.visible = true
         write(PreWarningView(model: warning).background(fakeDesktop),
-              size: CGSize(width: 460, height: 100), to: directory.appendingPathComponent("prewarning.png"))
+              size: CGSize(width: 300, height: 100), to: directory.appendingPathComponent("prewarning.png"))
 
         for tab in SettingsView.Tab.allCases {
             write(SettingsView(store: settings, initialTab: tab, snapshot: true, previewBreak: { _ in }, previewSound: {}),

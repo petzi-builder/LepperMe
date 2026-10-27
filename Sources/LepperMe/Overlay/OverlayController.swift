@@ -59,6 +59,7 @@ final class OverlayController {
 
     private var preWarningPanel: NSPanel?
     private var preWarningModel: PreWarningModel?
+    private var preWarningFollow: AnyCancellable?
 
     init(sounds: SoundEngine) {
         self.sounds = sounds
@@ -80,6 +81,12 @@ final class OverlayController {
         dismiss(animated: false)
         self.completion = completion
         self.playSound = playSound
+
+        // Posture is a quick, non-blocking hint, not a break.
+        if kind == .posture {
+            showPostureHUD(message: message, duration: duration)
+            return
+        }
 
         let model = OverlayModel(
             kind: kind, message: message, duration: duration,
@@ -216,26 +223,111 @@ final class OverlayController {
         previousApp = nil
     }
 
+    // MARK: - Posture HUD
+
+    private var postureHUD: NSPanel?
+
+    /// Small card in the middle of the screen the user is working on. Click-through, auto-dismissing.
+    private func showPostureHUD(message: String, duration: TimeInterval) {
+        let model = PostureHUDModel(message: message)
+        let host = NSHostingView(rootView: PostureHUDView(model: model))
+        // Measure first, then freeze the size (sizingOptions = [] makes fittingSize report zero).
+        let size = host.fittingSize
+        host.sizingOptions = []
+        host.frame = NSRect(origin: .zero, size: size)
+
+        let panel = FloatingPanel(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.contentView = host
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.ignoresMouseEvents = true // never in the way of the user's work
+        panel.level = .statusBar
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        if let screen = NSScreen.underMouse ?? NSScreen.main {
+            let frame = screen.frame
+            panel.setFrameOrigin(NSPoint(x: frame.midX - size.width / 2, y: frame.midY - size.height / 2))
+        }
+        panel.orderFrontRegardless()
+        postureHUD = panel
+
+        DispatchQueue.main.async { model.visible = true }
+        if playSound { sounds.play(.posture) }
+
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(max(1, duration) * 1_000_000_000))
+            model.visible = false
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            panel.orderOut(nil)
+            guard let self else { return }
+            if self.postureHUD === panel { self.postureHUD = nil }
+            let completion = self.completion
+            self.completion = nil
+            completion?(.completed)
+        }
+    }
+
+    // MARK: - Toast (status messages like "Meeting erkannt")
+
+    private var toastPanel: NSPanel?
+
+    /// Silent pill at the top of the screen the user is working on. Click-through, auto-hiding.
+    func showToast(symbol: String, title: String, message: String, duration: TimeInterval = 4) {
+        toastPanel?.orderOut(nil)
+        let model = ToastModel(symbol: symbol, title: title, message: message)
+        let host = NSHostingView(rootView: ToastView(model: model))
+        let size = host.fittingSize
+        host.sizingOptions = []
+        host.frame = NSRect(origin: .zero, size: size)
+
+        let panel = FloatingPanel(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.contentView = host
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.ignoresMouseEvents = true
+        panel.level = .statusBar
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        if let screen = NSScreen.underMouse ?? NSScreen.main {
+            let frame = screen.visibleFrame
+            let inset = ToastView.shadowPadding
+            panel.setFrameOrigin(NSPoint(x: frame.midX - size.width / 2, y: frame.maxY - size.height + inset - 12))
+        }
+        panel.orderFrontRegardless()
+        toastPanel = panel
+        DispatchQueue.main.async { model.visible = true }
+
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            model.visible = false
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            panel.orderOut(nil)
+            if self?.toastPanel === panel { self?.toastPanel = nil }
+        }
+    }
+
     // MARK: - Pre-warning
 
-    func showPreWarning(
-        kind: ReminderKind,
-        seconds: Int,
-        allowSnooze: Bool,
-        snoozeMinutes: Int,
-        playSound: Bool,
-        onSkip: @escaping () -> Void,
-        onSnooze: @escaping () -> Void
-    ) {
+    func showPreWarning(kind: ReminderKind, seconds: Int, playSound: Bool) {
         hidePreWarning(animated: false)
-        let model = PreWarningModel(kind: kind, seconds: seconds, allowSnooze: allowSnooze, snoozeMinutes: snoozeMinutes)
-        model.onSkip = { [weak self] in self?.hidePreWarning(); onSkip() }
-        model.onSnooze = { [weak self] in self?.hidePreWarning(); onSnooze() }
+        let model = PreWarningModel(kind: kind, seconds: seconds)
         preWarningModel = model
 
-        let host = FirstMouseHostingView(rootView: PreWarningView(model: model))
+        let host = NSHostingView(rootView: PreWarningView(model: model))
         let size = host.fittingSize
-        let panel = NSPanel(
+        host.sizingOptions = []
+        host.frame = NSRect(origin: .zero, size: size)
+        let panel = FloatingPanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -245,21 +337,54 @@ final class OverlayController {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false // the SwiftUI view draws its own soft shadow
+        panel.ignoresMouseEvents = true // it travels with the pointer, so it must never catch clicks
         panel.level = .statusBar
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        if let screen = NSScreen.underMouse ?? NSScreen.main {
-            let frame = screen.visibleFrame
-            panel.setFrameOrigin(NSPoint(x: frame.midX - size.width / 2, y: frame.maxY - size.height))
-        }
+        var origin = Self.originAtMouse(panelSize: size, inset: PreWarningView.shadowPadding)
+        panel.setFrameOrigin(origin)
         panel.orderFrontRegardless()
         preWarningPanel = panel
+
+        // Follow the pointer with a slight, smooth lag (polling needs no permissions).
+        preWarningFollow = Timer.publish(every: 1.0 / 60, on: .main, in: .common)
+            .autoconnect()
+            .sink { _ in
+                let target = Self.originAtMouse(panelSize: size, inset: PreWarningView.shadowPadding)
+                let dx = target.x - origin.x, dy = target.y - origin.y
+                // Jump when switching displays, glide otherwise.
+                if abs(dx) > 600 || abs(dy) > 600 {
+                    origin = target
+                } else {
+                    origin = NSPoint(x: origin.x + dx * 0.35, y: origin.y + dy * 0.35)
+                }
+                panel.setFrameOrigin(origin)
+            }
 
         // Next run loop pass, so SwiftUI animates from hidden to visible.
         DispatchQueue.main.async { model.visible = true }
         if playSound { sounds.play(.preWarning) }
     }
 
+    /// The card's top-left corner sits just below and right of the pointer tip, like a tooltip.
+    /// Near the right or bottom edge it flips to the other side; it always stays on screen.
+    static func originAtMouse(panelSize size: NSSize, inset: CGFloat) -> NSPoint {
+        let mouse = NSEvent.mouseLocation
+        let bounds = (NSScreen.underMouse ?? NSScreen.main)?.visibleFrame ?? NSRect(origin: .zero, size: size)
+        let card = NSSize(width: size.width - 2 * inset, height: size.height - 2 * inset)
+        let offset = NSPoint(x: 14, y: 24) // clears the arrow cursor
+
+        var cardX = mouse.x + offset.x
+        if cardX + card.width > bounds.maxX { cardX = mouse.x - offset.x - card.width }
+        var cardTop = mouse.y - offset.y
+        if cardTop - card.height < bounds.minY { cardTop = mouse.y + card.height + 8 }
+
+        cardX = min(max(cardX, bounds.minX + 4), bounds.maxX - card.width - 4)
+        cardTop = min(max(cardTop, bounds.minY + card.height + 4), bounds.maxY - 4)
+        return NSPoint(x: cardX - inset, y: cardTop - card.height - inset)
+    }
+
     func hidePreWarning(animated: Bool = true) {
+        preWarningFollow = nil
         guard let panel = preWarningPanel else { return }
         preWarningPanel = nil
         let model = preWarningModel
@@ -307,9 +432,10 @@ final class OverlayWindow: NSWindow {
     }
 }
 
-/// Lets buttons in a non-activating panel react to the first click.
-final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+/// Borderless panel for hints (pre-warning, posture, toasts). Its frame includes transparent
+/// shadow padding, so AppKit must not nudge it away from screen edges.
+final class FloatingPanel: NSPanel {
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
 }
 
 extension NSScreen {

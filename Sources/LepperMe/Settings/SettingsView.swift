@@ -150,6 +150,9 @@ private struct RemindersTab: View {
                 get: { config(kind).durationSeconds / 60 },
                 set: { store.settings.reminders[kind, default: kind.defaultConfig].durationSeconds = $0 * 60 }
             ), range: 1...30) { "\($0) Min." }
+        } else if kind == .posture {
+            // A quick hint, not a break: a few seconds are enough.
+            ValueStepper(value: binding(kind, \.durationSeconds), range: 3...30) { "\($0) Sek." }
         } else {
             ValueStepper(value: binding(kind, \.durationSeconds), range: 5...120, step: 5) { "\($0) Sek." }
         }
@@ -244,6 +247,10 @@ private struct MeetingsTab: View {
                 RowDivider()
                 SettingRow(label: "Puffer nach Meeting-Ende", hint: "Kurzes Stummschalten beendet kein Meeting") {
                     ValueStepper(value: $settings.meetingBufferSeconds, range: 0...300, step: 10) { "\($0) Sek." }
+                }
+                RowDivider()
+                SettingRow(label: "Hinweis bei Meeting-Beginn und -Ende", hint: "Kurz und ohne Ton, oben auf dem Bildschirm") {
+                    Toggle("", isOn: $settings.meetingNoticeEnabled).labelsHidden()
                 }
             }
 

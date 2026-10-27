@@ -7,12 +7,12 @@ Eine schlanke Menüleisten-App für macOS, die dich in einstellbaren Abständen 
 Voraussetzungen: macOS 13 (Ventura) oder neuer und Swift, z. B. über die Xcode Command Line Tools (`xcode-select --install`).
 
 ```bash
-git clone <repo-url> LepperMe
+git clone https://github.com/petzi-builder/LepperMe.git
 cd LepperMe
 ./run.sh          # oder: make run
 ```
 
-Das Skript baut die App im Release-Modus, legt `build/LepperMe.app` an und startet sie. Das Symbol erscheint in der Menüleiste; ein Dock-Symbol gibt es nicht.
+Das Skript baut die App im Release-Modus, legt `build/LepperMe.app` an und startet sie. Das Symbol erscheint in der Menüleiste; ein Dock-Symbol gibt es nicht. Den SwiftPM-Build-Cache legt das Skript unter `~/Library/Caches/LepperMe/build` ab, weil Ordner, die von Sync- oder Backup-Tools überwacht werden, die SQLite-Datenbank von SwiftPM beschädigen können; mit `LEPPERME_BUILD_PATH` lässt sich der Ort ändern.
 
 | Befehl | Wirkung |
 |---|---|
@@ -35,16 +35,19 @@ Die Standardwerte folgen gängigen Empfehlungen. Intervall, Dauer und An/Aus sin
 | Typ | Standard | Dauer |
 |---|---|---|
 | Augenpause (20-20-20-Regel) | alle 20 Min. | 20 Sek. |
-| Haltung | alle 30 Min. | 10 Sek. |
+| Haltung | alle 30 Min. | 5 Sek. |
 | Pause | alle 60 Min. | 5 Min. |
 
 - Sind mehrere gleichzeitig fällig, kommt nur die wichtigste (Pause > Augenpause > Haltung); die kleineren Timer werden mit zurückgesetzt.
-- Kurz vorher erscheint oben eine Vorwarnung mit „Später“ und „Überspringen“.
-- Das Overlay deckt alle Bildschirme ab, auch Vollbild-Apps. Überspringen geht per Button oder mit Esc.
+- Vor Augenpause und Pause hängt eine Vorwarnung mit Countdown am Mauszeiger und wandert mit, bis die Pause beginnt. Sie fängt keine Klicks ab; „Später“ und „Überspringen“ gibt es im Overlay (auch per Esc).
+- **Augenpause und Pause** sind Vollbild-Overlays auf allen Bildschirmen, auch über Vollbild-Apps. Jede hat ihre eigene Animation: ein blinzelndes Auge mit Ringen, die in die Tiefe ziehen, bzw. eine Atem-Kugel (4 Sek. ein, 4 Sek. aus). Überspringen geht per Button oder mit Esc.
+- **Haltung** ist keine Pause, sondern ein kurzer Hinweis in der Mitte des Bildschirms mit dem Mauszeiger: Ein Pfeil steigt sanft auf und schwebt. Er blockiert nichts (Klicks gehen durch), verschwindet von selbst und kommt ohne Vorwarnung.
 
 ## Meetings, ohne Kalender
 
 LepperMe fragt lokal ab, **ob** Mikrofon oder Kamera gerade von irgendeiner App benutzt werden (CoreAudio / CoreMediaIO). Dabei wird nichts aufgenommen, deshalb braucht die App auch keine Mikrofon- oder Kameraberechtigung. Laufende Meeting-Apps (Zoom, Teams, Webex, Slack, FaceTime) werden als Zusatzinfo erkannt; die Liste ist erweiterbar.
+
+Erkennt LepperMe ein Meeting, erscheint oben kurz und ohne Ton „Meeting erkannt“, damit klar ist, dass keine Unterbrechung kommt; am Ende entsprechend „Meeting beendet“. Abschaltbar in den Einstellungen.
 
 Während eines Meetings werden fällige Erinnerungen gesammelt. Nach dem Meeting (plus 30 Sek. Puffer) kommt **eine** zusammengefasste Erinnerung.
 
@@ -56,7 +59,7 @@ LepperMe folgt dem revel8-Designsystem (Figma „revel8 - master file“): Navy 
 
 - **Overlay:** driftende Aurora im Markenverlauf, leuchtender Countdown-Ring, gestaffelter Auftritt, Häkchen-Animation am Ende. Bei „Bewegung reduzieren“ (macOS-Bedienungshilfen) steht der Hintergrund still.
 - **Töne:** zur Laufzeit synthetisiert (glockenartige Obertöne plus Hall), keine Audiodateien. Lautstärke in den Einstellungen.
-- **Menüleiste:** Der Ring um das Auge füllt sich bis zur nächsten Erinnerung.
+- **Menüleiste:** Der Ring um die revel8-„8“ füllt sich bis zur nächsten Erinnerung. Im Meeting zeigt das Symbol eine Kamera, bei manueller Pause ein Pause-Zeichen.
 
 ### Schrift, Logo, Icon
 
@@ -66,15 +69,17 @@ LepperMe folgt dem revel8-Designsystem (Figma „revel8 - master file“): Navy 
 
 ### Mehrere Bildschirme
 
-Das Overlay erscheint auf jedem angeschlossenen Bildschirm in exakt dessen Größe, der Inhalt skaliert mit (kleine Displays, 5K, Hochformat). Tastatur-Fokus und Vorwarnung landen auf dem Bildschirm mit dem Mauszeiger. Wird während einer Pause ein Display an- oder abgesteckt, baut sich das Overlay neu auf.
+Das Overlay erscheint auf jedem angeschlossenen Bildschirm in exakt dessen Größe, der Inhalt skaliert mit (kleine Displays, 5K, Hochformat). Tastatur-Fokus (für Esc), Haltungs-Hinweis und Meeting-Hinweis landen auf dem Bildschirm mit dem Mauszeiger; die Vorwarnung folgt dem Zeiger auch über Bildschirmgrenzen. Wird während einer Pause ein Display an- oder abgesteckt, baut sich das Overlay neu auf.
 
 ### Entwicklung
 
 | Argument | Wirkung |
 |---|---|
-| `--preview eyes\|posture\|rest` | zeigt sofort ein Overlay |
+| `--preview eyes\|posture\|rest` | zeigt sofort Overlay bzw. Haltungs-Hinweis |
 | `--settings` | öffnet die Einstellungen |
 | `--snapshot <ordner>` | rendert Overlay, Vorwarnung und Einstellungen als PNG und beendet sich |
+| `--prewarning` | zeigt die Vorwarnung |
+| `--meeting-toast` | zeigt den Hinweis „Meeting erkannt“ |
 | `--play-sounds` | spielt alle Töne nacheinander ab |
 | `--render-icon <datei.png>` | rendert das App-Icon (1024 px) |
 
@@ -93,12 +98,14 @@ Sources/LepperMe/
 ├── App/            main.swift, AppDelegate (Einstieg, verdrahtet alles), Snapshot (PNG-Export für Design-Reviews)
 ├── Reminders/      ReminderKind (Typen, Standardwerte), ReminderScheduler (Timer, Prioritäten, Meeting-Stau)
 ├── Detection/      MeetingDetector (Mikrofon, Kamera, Apps), ActivityMonitor (Inaktivität, Sperre, Ruhezustand)
-├── Overlay/        OverlayController (Fenster pro Bildschirm, Vorwarnung), OverlayView (SwiftUI)
+├── Overlay/        OverlayController (Fenster pro Bildschirm, Hinweise), OverlayView (Overlay, Vorwarnung),
+│                   BreakAnimations (Auge, Atem-Kugel, Pfeil, Haltungs-Hinweis), ToastView (Meeting-Hinweis)
 ├── MenuBar/        StatusBarController (Symbol und Menü)
 ├── Settings/       SettingsStore (UserDefaults), SettingsView (SwiftUI), LoginItem (SMAppService)
-├── Design/         Theme (revel8-Tokens, Schrift), Components (Buttons, Cards, Stepper, Slider, Toggle, Tabs)
+├── Design/         Theme (revel8-Tokens, Schrift), Components (Buttons, Cards, Stepper, Slider, Toggle, Tabs),
+│                   Brand (revel8-Logo als Vektor)
 └── Sound/          SoundEngine (synthetisierte Töne)
-Resources/Info.plist, Resources/Fonts/ (optional, Geist)
+Resources/           Info.plist, AppIcon.icns, Fonts/ (Geist + Lizenz)
 ```
 
 ## Datenschutz
