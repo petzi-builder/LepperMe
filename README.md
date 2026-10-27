@@ -111,3 +111,7 @@ Resources/           Info.plist, AppIcon.icns, Fonts/ (Geist + Lizenz)
 ## Datenschutz
 
 Kein Kalenderzugriff, keine Audio- oder Videoaufnahme, keine Netzwerkverbindungen, keine Telemetrie. Einstellungen liegen lokal in `UserDefaults`.
+
+## Lizenz
+
+LepperMe steht unter der [MIT-Lizenz](LICENSE). Ausgenommen sind die Schrift Geist (SIL Open Font License 1.1, siehe `Resources/Fonts/Geist-OFL.txt`) sowie das revel8-Logo und die Marke revel8, die nicht unter die MIT-Lizenz fallen.
