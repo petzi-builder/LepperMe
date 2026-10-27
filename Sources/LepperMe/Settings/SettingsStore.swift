@@ -19,6 +19,7 @@ struct AppSettings: Codable, Equatable {
     var detectMicrophone = true
     var detectCamera = true
     var meetingBufferSeconds = 30
+    var meetingNoticeEnabled = true
     var meetingApps: [String] = [
         "us.zoom.xos",                 // Zoom
         "com.microsoft.teams2",        // Microsoft Teams (neu)
@@ -54,6 +55,7 @@ struct AppSettings: Codable, Equatable {
         detectMicrophone = (try? c.decode(Bool.self, forKey: .detectMicrophone)) ?? d.detectMicrophone
         detectCamera = (try? c.decode(Bool.self, forKey: .detectCamera)) ?? d.detectCamera
         meetingBufferSeconds = (try? c.decode(Int.self, forKey: .meetingBufferSeconds)) ?? d.meetingBufferSeconds
+        meetingNoticeEnabled = (try? c.decode(Bool.self, forKey: .meetingNoticeEnabled)) ?? d.meetingNoticeEnabled
         meetingApps = (try? c.decode([String].self, forKey: .meetingApps)) ?? d.meetingApps
         launchAtLogin = (try? c.decode(Bool.self, forKey: .launchAtLogin)) ?? d.launchAtLogin
         idleThresholdMinutes = (try? c.decode(Int.self, forKey: .idleThresholdMinutes)) ?? d.idleThresholdMinutes

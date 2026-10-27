@@ -66,6 +66,12 @@ struct OverlayView: View {
                 .padding(.top, Theme.Space.s32)
                 .entrance(isAppeared, delay: 0.15, scale: 0.85)
 
+            CountdownText(model: model)
+                .padding(.top, Theme.Space.s24)
+                .opacity(model.phase == .completed ? 0 : 1)
+                .animation(.easeOut(duration: 0.25), value: model.phase)
+                .entrance(isAppeared, delay: 0.22)
+
             VStack(spacing: Theme.Space.s12) {
                 Text(model.phase == .completed ? "\(model.kind.title) beendet" : model.kind.title)
                     .font(Theme.font(36, .semibold))
@@ -81,14 +87,8 @@ struct OverlayView: View {
                     .frame(maxWidth: 520)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.top, Theme.Space.s32)
+            .padding(.top, Theme.Space.s16)
             .entrance(isAppeared, delay: 0.28)
-
-            if model.kind == .rest && model.phase == .running {
-                BreathingHint(reduceMotion: model.reduceMotion)
-                    .padding(.top, Theme.Space.s24)
-                    .entrance(isAppeared, delay: 0.4)
-            }
 
             HStack(spacing: Theme.Space.s12) {
                 if model.allowSnooze {
@@ -111,6 +111,31 @@ struct OverlayView: View {
                 .entrance(isAppeared, delay: 0.55)
         }
         .padding(Theme.Space.s48)
+    }
+}
+
+/// Remaining time under the ring, e.g. "0:18".
+private struct CountdownText: View {
+    @ObservedObject var model: OverlayModel
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.25)) { context in
+            let remaining = model.remaining(at: context.date)
+            Text(Self.format(remaining))
+                .font(Theme.font(40, .semibold).monospacedDigit())
+                .tracking(-1.2)
+                .foregroundStyle(Theme.contentPrimary)
+                .lineLimit(1)
+                .fixedSize()
+                .contentTransition(.opacity)
+                .animation(.easeInOut(duration: 0.25), value: Int(ceil(remaining)))
+        }
+        .accessibilityLabel("Verbleibende Zeit")
+    }
+
+    static func format(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(ceil(seconds)))
+        return String(format: "%d:%02d", total / 60, total % 60)
     }
 }
 
@@ -143,7 +168,6 @@ private struct BreakRing: View {
         TimelineView(.animation(minimumInterval: 1.0 / 30, paused: model.phase != .running)) { context in
             // Ring empties while the break runs, then fills up green when it's done.
             let progress = model.phase == .running ? 1 - model.progress(at: context.date) : 1
-            let remaining = model.remaining(at: context.date)
 
             ZStack {
                 // Soft halo that breathes (8 s cycle).
@@ -169,22 +193,16 @@ private struct BreakRing: View {
                         .shadow(color: Theme.success.opacity(0.6), radius: 12)
                         .transition(.scale(scale: 0.6).combined(with: .opacity))
                 } else {
-                    // Digits sit exactly in the ring's center; the label hangs below them.
-                    ZStack {
-                        Text(Self.format(remaining))
-                            .font(Theme.font(64, .semibold).monospacedDigit())
-                            .tracking(-2)
-                            .foregroundStyle(Theme.contentPrimary)
-                            .lineLimit(1)
-                            .fixedSize()
-                            .contentTransition(.opacity)
-                            .animation(.easeInOut(duration: 0.25), value: Int(ceil(remaining)))
-                        Text("verbleibend")
-                            .font(Theme.bodyMedium)
-                            .foregroundStyle(Theme.contentSubdued)
-                            .offset(y: 52)
+                    // Each break type has its own animation in the ring's center.
+                    Group {
+                        switch model.kind {
+                        case .eyes: EyeAnimation(reduceMotion: model.reduceMotion)
+                        case .rest: BreathingAnimation(reduceMotion: model.reduceMotion)
+                        case .posture: PostureAnimation(reduceMotion: model.reduceMotion)
+                        }
                     }
-                    .transition(.scale(scale: 1.2).combined(with: .opacity))
+                    .frame(width: 210, height: 210)
+                    .transition(.scale(scale: 0.8).combined(with: .opacity))
                 }
             }
             .animation(.spring(response: 0.5, dampingFraction: 0.7), value: model.phase)
@@ -209,11 +227,6 @@ private struct BreakRing: View {
             )
             .rotationEffect(.degrees(-90))
     }
-
-    static func format(_ seconds: TimeInterval) -> String {
-        let total = max(0, Int(ceil(seconds)))
-        return String(format: "%d:%02d", total / 60, total % 60)
-    }
 }
 
 private struct CheckMark: Shape {
@@ -223,24 +236,6 @@ private struct CheckMark: Shape {
         p.addLine(to: CGPoint(x: rect.minX + rect.width * 0.36, y: rect.maxY))
         p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
         return p
-    }
-}
-
-/// "Einatmen / Ausatmen" in sync with the ring's 8 s breathing halo.
-private struct BreathingHint: View {
-    let reduceMotion: Bool
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 4)) { context in
-            let inhale = Int(context.date.timeIntervalSinceReferenceDate / 4) % 2 == 0
-            Text(inhale ? "Einatmen" : "Ausatmen")
-                .font(Theme.bodyMediumStrong)
-                .foregroundStyle(Theme.Blue.b300)
-                .id(inhale)
-                .transition(.opacity)
-                .animation(.easeInOut(duration: 0.8), value: inhale)
-        }
-        .opacity(reduceMotion ? 0 : 1)
     }
 }
 
@@ -322,31 +317,27 @@ struct VisualEffectBlur: NSViewRepresentable {
 @MainActor
 final class PreWarningModel: ObservableObject {
     let kind: ReminderKind
-    let allowSnooze: Bool
-    let snoozeMinutes: Int
     let endDate: Date
     let lead: TimeInterval
     @Published var visible = false
-    var onSkip: () -> Void = {}
-    var onSnooze: () -> Void = {}
 
-    init(kind: ReminderKind, seconds: Int, allowSnooze: Bool, snoozeMinutes: Int) {
+    init(kind: ReminderKind, seconds: Int) {
         self.kind = kind
-        self.allowSnooze = allowSnooze
-        self.snoozeMinutes = snoozeMinutes
         self.lead = TimeInterval(seconds)
         self.endDate = Date().addingTimeInterval(TimeInterval(seconds))
     }
 }
 
-/// Pill that slides in from the top edge, with a depleting mini ring.
+/// Compact pill that hangs at the mouse pointer and travels with it until the break starts.
+/// Click-through by design: skipping and snoozing happen in the overlay (buttons or Esc).
 struct PreWarningView: View {
+    static let shadowPadding: CGFloat = 28
     @ObservedObject var model: PreWarningModel
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
             let left = max(0, model.endDate.timeIntervalSince(context.date))
-            HStack(spacing: Theme.Space.s12) {
+            HStack(spacing: 10) {
                 ZStack {
                     Circle().stroke(Theme.Grey.g0.opacity(0.12), lineWidth: 2.5)
                     Circle()
@@ -354,40 +345,29 @@ struct PreWarningView: View {
                         .stroke(Theme.ringGradient, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                     Image(systemName: model.kind.symbol)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(Theme.contentPrimary)
                 }
-                .frame(width: 28, height: 28)
+                .frame(width: 26, height: 26)
 
                 Text("\(model.kind.title) in \(Int(ceil(left))) s")
                     .font(Theme.bodyMediumStrong.monospacedDigit())
                     .foregroundStyle(Theme.contentPrimary)
                     .fixedSize()
-
-                Spacer(minLength: Theme.Space.s8)
-
-                if model.allowSnooze {
-                    Button("Später") { model.onSnooze() }
-                        .buttonStyle(RButtonStyle(kind: .ghost))
-                }
-                Button("Überspringen") { model.onSkip() }
-                    .buttonStyle(RButtonStyle(kind: .ghost))
             }
-            .padding(.leading, 10)
-            .padding(.trailing, 6)
-            .frame(width: 440, height: 48)
-            .background(
-                Capsule().fill(Theme.backgroundCanvas.opacity(0.94))
-            )
+            .padding(.leading, 8)
+            .padding(.trailing, 16)
+            .frame(height: 42)
+            .background(Capsule().fill(Theme.backgroundCanvas.opacity(0.94)))
             .overlay(Capsule().strokeBorder(Theme.borderPrimary, lineWidth: 1))
-            .shadow(color: Theme.backgroundCanvas.opacity(0.35), radius: 24, y: 12)
+            .shadow(color: Theme.backgroundCanvas.opacity(0.4), radius: 18, y: 8)
         }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 32)
-        .padding(.top, 8)
-        .offset(y: model.visible ? 0 : -90)
+        .padding(PreWarningView.shadowPadding) // room for the soft shadow inside the panel
+        // Pops out of the pointer: grows from the top-left corner, which sits at the cursor.
+        .scaleEffect(model.visible ? 1 : 0.6, anchor: .topLeading)
         .opacity(model.visible ? 1 : 0)
-        .animation(.spring(response: 0.55, dampingFraction: 0.78), value: model.visible)
+        .blur(radius: model.visible ? 0 : 4)
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: model.visible)
         .environment(\.colorScheme, .dark)
     }
 }

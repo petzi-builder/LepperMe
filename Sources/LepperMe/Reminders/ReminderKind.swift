@@ -46,7 +46,7 @@ enum ReminderKind: String, CaseIterable, Codable, CodingKeyRepresentable, Identi
     var message: String {
         switch self {
         case .eyes: return "Schau 20 Sekunden auf etwas, das etwa 6 Meter entfernt ist."
-        case .posture: return "Richte dich auf: Schultern zurück, Füße flach, Bildschirm auf Augenhöhe."
+        case .posture: return "Schultern zurück, Kopf hoch, Füße flach."
         case .rest: return "Steh auf, beweg dich, trink etwas Wasser."
         }
     }
@@ -72,7 +72,7 @@ enum ReminderKind: String, CaseIterable, Codable, CodingKeyRepresentable, Identi
     var defaultConfig: ReminderConfig {
         switch self {
         case .eyes: return ReminderConfig(isEnabled: true, intervalMinutes: 20, durationSeconds: 20)
-        case .posture: return ReminderConfig(isEnabled: true, intervalMinutes: 30, durationSeconds: 10)
+        case .posture: return ReminderConfig(isEnabled: true, intervalMinutes: 30, durationSeconds: 5)
         case .rest: return ReminderConfig(isEnabled: true, intervalMinutes: 60, durationSeconds: 5 * 60)
         }
     }

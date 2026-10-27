@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         meetings.start()
         activity.start()
         scheduler.start()
+        observeMeetings()
 
         statusBar = StatusBarController(scheduler: scheduler) { [weak self] in
             self?.showSettings()
@@ -57,6 +58,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
            let kind = ReminderKind(rawValue: args[i + 1]) {
             scheduler.preview(kind)
         }
+        if args.contains("--prewarning") {
+            let s = settings.settings
+            overlay.showPreWarning(kind: .eyes, seconds: s.preWarningSeconds, playSound: s.soundEnabled)
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(s.preWarningSeconds) * 1_000_000_000)
+                self?.overlay.hidePreWarning()
+            }
+        }
+        if args.contains("--meeting-toast") {
+            overlay.showToast(symbol: "video.fill", title: "Meeting erkannt", message: "Keine Erinnerungen, bis es vorbei ist.")
+        }
         if args.contains("--play-sounds") {
             Task { @MainActor in
                 for cue in SoundEngine.Cue.allCases {
@@ -68,6 +80,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if args.contains("--settings") {
             showSettings()
         }
+    }
+
+    /// Tell the user when a meeting is detected, so they know they won't be interrupted.
+    private func observeMeetings() {
+        meetings.$isInMeeting
+            .removeDuplicates()
+            .dropFirst() // initial value, not a change
+            .sink { [weak self] inMeeting in
+                guard let self, self.settings.settings.meetingNoticeEnabled else { return }
+                if inMeeting {
+                    self.overlay.showToast(
+                        symbol: "video.fill",
+                        title: "Meeting erkannt",
+                        message: "Keine Erinnerungen, bis es vorbei ist."
+                    )
+                } else if self.scheduler.pending.isEmpty {
+                    // With reminders waiting, the combined reminder itself shows up right away instead.
+                    self.overlay.showToast(
+                        symbol: "checkmark",
+                        title: "Meeting beendet",
+                        message: "Erinnerungen laufen wieder."
+                    )
+                }
+            }
+            .store(in: &cancellables)
     }
 
     private func showSettings() {
