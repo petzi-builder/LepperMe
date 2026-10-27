@@ -20,8 +20,10 @@ uninstall:
 	pkill -x "$(APP_NAME)" 2>/dev/null || true
 	rm -rf "$(INSTALL_DIR)/$(APP_NAME).app"
 
-# ZIP for GitHub Releases
-zip: build
+# Universal (Apple silicon + Intel) ZIP for GitHub Releases
+zip:
+	./run.sh --no-open --universal
+	rm -f "build/$(APP_NAME).zip"
 	cd build && ditto -c -k --keepParent "$(APP_NAME).app" "$(APP_NAME).zip"
 	@echo "build/$(APP_NAME).zip"
 

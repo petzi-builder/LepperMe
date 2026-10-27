@@ -4,7 +4,21 @@ Eine schlanke Menüleisten-App für macOS, die dich in einstellbaren Abständen 
 
 ## Installation
 
-Voraussetzungen: macOS 13 (Ventura) oder neuer und Swift, z. B. über die Xcode Command Line Tools (`xcode-select --install`).
+### Für alle: fertige App herunterladen
+
+1. Öffne die [neueste Version](https://github.com/petzi-builder/LepperMe/releases/latest) und lade **LepperMe.zip** herunter.
+2. Öffne die heruntergeladene Datei per Doppelklick. Es erscheint **LepperMe**.
+3. Ziehe **LepperMe** in den Ordner **Programme**.
+4. Öffne LepperMe per Doppelklick. macOS meldet beim ersten Mal, dass die App nicht geprüft werden kann. Klicke auf **Fertig**.
+5. Öffne **Systemeinstellungen → Datenschutz & Sicherheit**, scrolle nach unten und klicke bei LepperMe auf **Trotzdem öffnen** (unter macOS 13 und 14 heißt der Button **Dennoch öffnen**). Bestätige mit deinem Passwort oder Touch ID.
+
+Danach erscheint die revel8-„8“ oben rechts in der Menüleiste. Über das Symbol erreichst du die Einstellungen; dort kannst du auch „Bei Anmeldung starten“ einschalten. Schritt 4 und 5 sind nur beim ersten Start nötig.
+
+LepperMe läuft auf macOS 13 (Ventura) oder neuer, auf Macs mit Apple-Chip und mit Intel-Prozessor. Die App ist nicht von Apple notarisiert, deshalb der Umweg über die Systemeinstellungen.
+
+### Für Entwickler: aus dem Quellcode bauen
+
+Voraussetzungen: macOS 13 oder neuer und Swift, z. B. über die Xcode Command Line Tools (`xcode-select --install`).
 
 ```bash
 git clone https://github.com/petzi-builder/LepperMe.git
@@ -12,21 +26,23 @@ cd LepperMe
 ./run.sh          # oder: make run
 ```
 
-Das Skript baut die App im Release-Modus, legt `build/LepperMe.app` an und startet sie. Das Symbol erscheint in der Menüleiste; ein Dock-Symbol gibt es nicht. Den SwiftPM-Build-Cache legt das Skript unter `~/Library/Caches/LepperMe/build` ab, weil Ordner, die von Sync- oder Backup-Tools überwacht werden, die SQLite-Datenbank von SwiftPM beschädigen können; mit `LEPPERME_BUILD_PATH` lässt sich der Ort ändern.
+Das Skript baut die App im Release-Modus, legt `build/LepperMe.app` an und startet sie. Den SwiftPM-Build-Cache legt das Skript unter `~/Library/Caches/LepperMe/build` ab, weil Ordner, die von Sync- oder Backup-Tools überwacht werden, die SQLite-Datenbank von SwiftPM beschädigen können; mit `LEPPERME_BUILD_PATH` lässt sich der Ort ändern.
 
 | Befehl | Wirkung |
 |---|---|
 | `make run` | bauen und starten |
 | `make build` | nur bauen |
 | `make install` | nach `~/Applications` kopieren |
-| `make zip` | `build/LepperMe.zip` für GitHub Releases erzeugen |
+| `make zip` | Universal-App (Apple-Chip und Intel) als `build/LepperMe.zip` für GitHub Releases |
 | `make preview KIND=rest` | App neu starten und sofort ein Overlay zeigen |
 | `make icon` | App-Icon neu erzeugen |
 | `make clean` | Build-Ordner löschen |
 
-### Vorgebaute App (GitHub Releases)
+### Neue Version veröffentlichen
 
-Lade `LepperMe.zip` herunter und entpacke es. Da die App nicht notarisiert ist, blockiert macOS den ersten Start: Klicke die App mit Rechtsklick an, wähle **Öffnen** und bestätige. Unter neueren macOS-Versionen musst du sie eventuell unter **Systemeinstellungen → Datenschutz & Sicherheit** mit **Trotzdem öffnen** freigeben.
+1. Version in `Resources/Info.plist` erhöhen (`CFBundleShortVersionString`, `CFBundleVersion`).
+2. `make zip`
+3. `gh release create vX.Y.Z build/LepperMe.zip --title "LepperMe X.Y.Z" --notes "…"`
 
 ## Erinnerungen
 

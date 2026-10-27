@@ -1,8 +1,19 @@
 #!/usr/bin/env bash
 # Builds LepperMe in release mode, assembles build/LepperMe.app and starts it.
-#   ./run.sh            build + start
-#   ./run.sh --no-open  build only
+#   ./run.sh                        build + start
+#   ./run.sh --no-open              build only
+#   ./run.sh --no-open --universal  build for Apple silicon and Intel (used for releases)
 set -euo pipefail
+
+OPEN=1
+UNIVERSAL=0
+for arg in "$@"; do
+    case "$arg" in
+        --no-open) OPEN=0 ;;
+        --universal) UNIVERSAL=1 ;;
+        *) echo "Unbekannte Option: $arg" >&2; exit 1 ;;
+    esac
+done
 
 cd "$(dirname "$0")"
 
@@ -19,12 +30,26 @@ fi
 
 echo "==> Baue ${APP_NAME} (Release) …"
 swift build -c release --scratch-path "${SCRATCH_PATH}"
-BIN_DIR="$(swift build -c release --scratch-path "${SCRATCH_PATH}" --show-bin-path)"
+BINARY="$(swift build -c release --scratch-path "${SCRATCH_PATH}" --show-bin-path)/${APP_NAME}"
+
+if [ "${UNIVERSAL}" = 1 ]; then
+    # Cross-compile the other architecture and merge both into one universal binary.
+    HOST_ARCH="$(uname -m)"
+    OTHER_ARCH=$([ "${HOST_ARCH}" = "arm64" ] && echo x86_64 || echo arm64)
+    echo "==> Baue ${APP_NAME} zusätzlich für ${OTHER_ARCH} …"
+    OTHER_SCRATCH="${SCRATCH_PATH}-${OTHER_ARCH}"
+    TRIPLE="${OTHER_ARCH}-apple-macosx13.0"
+    swift build -c release --triple "${TRIPLE}" --scratch-path "${OTHER_SCRATCH}"
+    OTHER_BINARY="$(swift build -c release --triple "${TRIPLE}" --scratch-path "${OTHER_SCRATCH}" --show-bin-path)/${APP_NAME}"
+    mkdir -p build
+    lipo -create "${BINARY}" "${OTHER_BINARY}" -output "build/${APP_NAME}-universal"
+    BINARY="build/${APP_NAME}-universal"
+fi
 
 echo "==> Erstelle ${APP} …"
 rm -rf "${APP}"
 mkdir -p "${APP}/Contents/MacOS" "${APP}/Contents/Resources"
-cp "${BIN_DIR}/${APP_NAME}" "${APP}/Contents/MacOS/${APP_NAME}"
+cp "${BINARY}" "${APP}/Contents/MacOS/${APP_NAME}"
 cp Resources/Info.plist "${APP}/Contents/Info.plist"
 if [ -d Resources/Fonts ]; then
     cp -R Resources/Fonts "${APP}/Contents/Resources/Fonts"
@@ -36,7 +61,9 @@ fi
 # Ad-hoc signature so macOS treats it as a proper bundle (needed e.g. for "Bei Anmeldung starten").
 codesign --force --deep --sign - "${APP}" >/dev/null
 
-if [ "${1:-}" != "--no-open" ]; then
+echo "==> Architekturen: $(lipo -archs "${APP}/Contents/MacOS/${APP_NAME}")"
+
+if [ "${OPEN}" = 1 ]; then
     # Restart if an older instance is running. Wait until it is really gone,
     # otherwise LaunchServices still sees it and `open` fails with error -600.
     if pkill -x "${APP_NAME}" 2>/dev/null; then
