@@ -67,7 +67,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         if args.contains("--meeting-toast") {
-            overlay.showToast(symbol: "video.fill", title: "Meeting erkannt", message: "Keine Erinnerungen, bis es vorbei ist.")
+            // Start notice, then the end notice a few seconds later.
+            showMeetingStartedNotice()
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 6_000_000_000)
+                self?.showMeetingEndedNotice(next: .eyes)
+            }
         }
         if args.contains("--play-sounds") {
             Task { @MainActor in
@@ -82,7 +87,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Tell the user when a meeting is detected, so they know they won't be interrupted.
+    /// Tell the user when a meeting is detected (so they know they won't be interrupted) and
+    /// pick them up again when it ends.
     private func observeMeetings() {
         meetings.$isInMeeting
             .removeDuplicates()
@@ -90,21 +96,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .sink { [weak self] inMeeting in
                 guard let self, self.settings.settings.meetingNoticeEnabled else { return }
                 if inMeeting {
-                    self.overlay.showToast(
-                        symbol: "video.fill",
-                        title: "Meeting erkannt",
-                        message: "Keine Erinnerungen, bis es vorbei ist."
-                    )
-                } else if self.scheduler.pending.isEmpty {
-                    // With reminders waiting, the combined reminder itself shows up right away instead.
-                    self.overlay.showToast(
-                        symbol: "checkmark",
-                        title: "Meeting beendet",
-                        message: "Erinnerungen laufen wieder."
-                    )
+                    self.showMeetingStartedNotice()
+                } else {
+                    let next = ReminderKind.byPriority.first(where: self.scheduler.pending.contains)
+                    self.showMeetingEndedNotice(next: next)
                 }
             }
             .store(in: &cancellables)
+    }
+
+    private func showMeetingStartedNotice() {
+        // Silent: the user is in a call.
+        overlay.showToast(symbol: "video.fill", title: "Meeting erkannt", message: "Keine Erinnerungen, bis es vorbei ist.")
+    }
+
+    private func showMeetingEndedNotice(next: ReminderKind?) {
+        let message = next.map { "Meeting beendet. \($0.nextLabel) in wenigen Sekunden." }
+            ?? "Meeting beendet. LepperMe erinnert dich wieder."
+        overlay.showToast(symbol: "hand.wave.fill", title: "Willkommen zurück", message: message,
+                          duration: ReminderScheduler.afterMeetingDelay - 0.5, sound: .welcomeBack)
     }
 
     private func showSettings() {

@@ -274,45 +274,51 @@ final class OverlayController {
 
     // MARK: - Toast (status messages like "Meeting erkannt")
 
-    private var toastPanel: NSPanel?
+    private var toastPanels: [NSPanel] = []
 
-    /// Silent pill at the top of the screen the user is working on. Click-through, auto-hiding.
-    func showToast(symbol: String, title: String, message: String, duration: TimeInterval = 4) {
-        toastPanel?.orderOut(nil)
+    /// Pill at the top of every connected screen. Click-through, auto-hiding.
+    func showToast(symbol: String, title: String, message: String, duration: TimeInterval = 4, sound: SoundEngine.Cue? = nil) {
+        toastPanels.forEach { $0.orderOut(nil) }
+        toastPanels = []
         let model = ToastModel(symbol: symbol, title: title, message: message)
-        let host = NSHostingView(rootView: ToastView(model: model))
-        let size = host.fittingSize
-        host.sizingOptions = []
-        host.frame = NSRect(origin: .zero, size: size)
 
-        let panel = FloatingPanel(
-            contentRect: NSRect(origin: .zero, size: size),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        panel.contentView = host
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = false
-        panel.ignoresMouseEvents = true
-        panel.level = .statusBar
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        if let screen = NSScreen.underMouse ?? NSScreen.main {
+        for screen in NSScreen.screens {
+            let host = NSHostingView(rootView: ToastView(model: model))
+            let size = host.fittingSize
+            host.sizingOptions = []
+            host.frame = NSRect(origin: .zero, size: size)
+
+            let panel = FloatingPanel(
+                contentRect: NSRect(origin: .zero, size: size),
+                styleMask: [.borderless, .nonactivatingPanel],
+                backing: .buffered,
+                defer: false
+            )
+            panel.contentView = host
+            panel.isOpaque = false
+            panel.backgroundColor = .clear
+            panel.hasShadow = false
+            panel.ignoresMouseEvents = true
+            panel.level = .statusBar
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+            // Pill top 12 pt below the menu bar (or the screen's top edge).
             let frame = screen.visibleFrame
-            let inset = ToastView.shadowPadding
-            panel.setFrameOrigin(NSPoint(x: frame.midX - size.width / 2, y: frame.maxY - size.height + inset - 12))
+            panel.setFrameOrigin(NSPoint(x: frame.midX - size.width / 2,
+                                         y: frame.maxY - size.height + ToastView.topPadding - 12))
+            panel.orderFrontRegardless()
+            toastPanels.append(panel)
         }
-        panel.orderFrontRegardless()
-        toastPanel = panel
         DispatchQueue.main.async { model.visible = true }
+        // Respects "Töne abspielen": the engine's volume is 0 when sounds are off.
+        if let sound { sounds.play(sound) }
 
+        let shown = toastPanels
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
             model.visible = false
             try? await Task.sleep(nanoseconds: 450_000_000)
-            panel.orderOut(nil)
-            if self?.toastPanel === panel { self?.toastPanel = nil }
+            shown.forEach { $0.orderOut(nil) }
+            if let self, self.toastPanels.first === shown.first { self.toastPanels = [] }
         }
     }
 

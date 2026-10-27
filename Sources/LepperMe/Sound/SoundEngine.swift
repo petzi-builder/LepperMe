@@ -12,6 +12,7 @@ final class SoundEngine {
         case skip
         case snooze
         case posture
+        case welcomeBack
     }
 
     var volume: Float = 0.7
@@ -106,6 +107,12 @@ final class SoundEngine {
             return [
                 Note(frequency: 659.25, start: 0.00, duration: 0.7, amplitude: 0.08),
                 Note(frequency: 987.77, start: 0.09, duration: 0.9, amplitude: 0.08)
+            ]
+        case .welcomeBack:
+            // Soft, friendly "I'm here again": rising fifth.
+            return [
+                Note(frequency: 523.25, start: 0.00, duration: 1.0, amplitude: 0.08),
+                Note(frequency: 783.99, start: 0.12, duration: 1.2, amplitude: 0.08)
             ]
         case .snooze:
             return [

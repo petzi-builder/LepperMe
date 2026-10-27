@@ -16,7 +16,10 @@ final class ToastModel: ObservableObject {
 }
 
 struct ToastView: View {
+    /// Transparent margin around the pill for its shadow. The shadow falls downwards, so the top
+    /// margin stays small: macOS won't let a window stick out above the topmost screen.
     static let shadowPadding: CGFloat = 32
+    static let topPadding: CGFloat = 8
     @ObservedObject var model: ToastModel
 
     var body: some View {
@@ -45,7 +48,8 @@ struct ToastView: View {
         .background(Capsule().fill(Theme.backgroundCanvas.opacity(0.94)))
         .overlay(Capsule().strokeBorder(Theme.borderPrimary, lineWidth: 1))
         .shadow(color: Theme.backgroundCanvas.opacity(0.35), radius: 24, y: 12)
-        .padding(ToastView.shadowPadding)
+        .padding(.top, ToastView.topPadding)
+        .padding([.horizontal, .bottom], ToastView.shadowPadding)
         .offset(y: model.visible ? 0 : -24)
         .opacity(model.visible ? 1 : 0)
         .blur(radius: model.visible ? 0 : 4)

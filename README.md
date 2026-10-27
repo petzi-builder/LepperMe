@@ -63,9 +63,9 @@ Die Standardwerte folgen gängigen Empfehlungen. Intervall, Dauer und An/Aus sin
 
 LepperMe fragt lokal ab, **ob** Mikrofon oder Kamera gerade von irgendeiner App benutzt werden (CoreAudio / CoreMediaIO). Dabei wird nichts aufgenommen, deshalb braucht die App auch keine Mikrofon- oder Kameraberechtigung. Laufende Meeting-Apps (Zoom, Teams, Webex, Slack, FaceTime) werden als Zusatzinfo erkannt; die Liste ist erweiterbar.
 
-Erkennt LepperMe ein Meeting, erscheint oben kurz und ohne Ton „Meeting erkannt“, damit klar ist, dass keine Unterbrechung kommt; am Ende entsprechend „Meeting beendet“. Abschaltbar in den Einstellungen.
+Erkennt LepperMe ein Meeting, erscheint oben auf jedem Bildschirm kurz und ohne Ton „Meeting erkannt“, damit klar ist, dass keine Unterbrechung kommt. Endet das Meeting (30 Sek. nachdem Mikrofon und Kamera aus sind), meldet sich LepperMe mit „Willkommen zurück“ und einem leisen Ton; warten Erinnerungen, nennt der Hinweis die nächste. Beide Hinweise sind in den Einstellungen abschaltbar.
 
-Während eines Meetings werden fällige Erinnerungen gesammelt. Nach dem Meeting (plus 30 Sek. Puffer) kommt **eine** zusammengefasste Erinnerung.
+Während eines Meetings werden fällige Erinnerungen gesammelt. Nach dem Meeting kommt **eine** zusammengefasste Erinnerung, wenige Sekunden nach „Willkommen zurück“.
 
 Außerdem pausieren die Timer bei Inaktivität, Bildschirmsperre und Ruhezustand. Wer länger als eine Pause weg war, startet mit frischen Timern.
 
@@ -85,7 +85,7 @@ LepperMe folgt dem revel8-Designsystem (Figma „revel8 - master file“): Navy 
 
 ### Mehrere Bildschirme
 
-Das Overlay erscheint auf jedem angeschlossenen Bildschirm in exakt dessen Größe, der Inhalt skaliert mit (kleine Displays, 5K, Hochformat). Tastatur-Fokus (für Esc), Haltungs-Hinweis und Meeting-Hinweis landen auf dem Bildschirm mit dem Mauszeiger; die Vorwarnung folgt dem Zeiger auch über Bildschirmgrenzen. Wird während einer Pause ein Display an- oder abgesteckt, baut sich das Overlay neu auf.
+Das Overlay erscheint auf jedem angeschlossenen Bildschirm in exakt dessen Größe, der Inhalt skaliert mit (kleine Displays, 5K, Hochformat). Tastatur-Fokus (für Esc) und Haltungs-Hinweis landen auf dem Bildschirm mit dem Mauszeiger, Meeting-Hinweise erscheinen auf allen Bildschirmen; die Vorwarnung folgt dem Zeiger auch über Bildschirmgrenzen. Wird während einer Pause ein Display an- oder abgesteckt, baut sich das Overlay neu auf.
 
 ### Entwicklung
 
@@ -95,7 +95,7 @@ Das Overlay erscheint auf jedem angeschlossenen Bildschirm in exakt dessen Grö�
 | `--settings` | öffnet die Einstellungen |
 | `--snapshot <ordner>` | rendert Overlay, Vorwarnung und Einstellungen als PNG und beendet sich |
 | `--prewarning` | zeigt die Vorwarnung |
-| `--meeting-toast` | zeigt den Hinweis „Meeting erkannt“ |
+| `--meeting-toast` | zeigt „Meeting erkannt“ und 6 Sek. später „Willkommen zurück“ |
 | `--play-sounds` | spielt alle Töne nacheinander ab |
 | `--render-icon <datei.png>` | rendert das App-Icon (1024 px) |
 

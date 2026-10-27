@@ -34,6 +34,10 @@ final class ReminderScheduler: ObservableObject {
     private var pausedUntil: Date?
     private var preWarnedKind: ReminderKind?
     private var wasIdle = false
+    private var wasInMeeting = false
+    private var meetingEndedAt: Date?
+    /// Pause between the "Willkommen zurück" notice and the combined reminder after a meeting.
+    static let afterMeetingDelay: TimeInterval = 6
     private var lastIdleSeconds: TimeInterval = 0
     private var lastTick = Date()
     private var timer: AnyCancellable?
@@ -144,6 +148,8 @@ final class ReminderScheduler: ObservableObject {
         }
 
         if meetings.isInMeeting {
+            meetingEndedAt = nil
+            wasInMeeting = true
             state = .inMeeting
             overlay.hidePreWarning()
             preWarnedKind = nil
@@ -154,9 +160,17 @@ final class ReminderScheduler: ObservableObject {
         }
 
         state = .running
+        if wasInMeeting {
+            wasInMeeting = false
+            meetingEndedAt = now
+        }
 
-        // After a meeting: one combined reminder instead of several in a row.
+        // After a meeting: one combined reminder instead of several in a row. It waits a few
+        // seconds so the "Willkommen zurück" notice is seen first.
         if !pending.isEmpty {
+            if let ended = meetingEndedAt, now.timeIntervalSince(ended) < Self.afterMeetingDelay {
+                return
+            }
             let kind = highestPriority(pending.union(due))
             pending.removeAll()
             show(kind, afterMeeting: true)
